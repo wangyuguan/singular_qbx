@@ -15,7 +15,7 @@ dgamma = @(t) [-sin(t); cos(t); 0];
 t_splits = linspace(0, 2*pi, nch2+1);
 angfun = @(th) 1 + 0.4*cos(th) + 0.3*sin(2*th);
 
-lam_t = 0.972;
+lam_t = 0.978;
 t_t = 2*pi*rand;
 x = [lam_t*cos(t_t); lam_t*sin(t_t); 0];
 
@@ -68,14 +68,11 @@ wgt = D.src_w.*sigma;
 G = exp(1i*zk*dvec)./(4*pi*dvec);
 coefs = (1i*zk*dvec - 1).*exp(1i*zk*dvec)./(4*pi*dvec.^3);
 
-opts.is_grad = false;
+opts.add_grad = true;
 Q = precompute_helm_qbx_corr(x, lam_t, t_t, D, opts, zk);
 S_qbx = sum(wgt.*G) + Q.S*sigma;
-
-opts.is_grad = true;
-Qg = precompute_helm_qbx_corr(x, lam_t, t_t, D, opts, zk);
-Sx_qbx = sum(wgt.*coefs.*df(1, :).') + Qg.Sx*sigma;
-Sy_qbx = sum(wgt.*coefs.*df(2, :).') + Qg.Sy*sigma;
+Sx_qbx = sum(wgt.*coefs.*df(1, :).') + Q.Sx*sigma;
+Sy_qbx = sum(wgt.*coefs.*df(2, :).') + Q.Sy*sigma;
 
 rel_S = abs(S_qbx - S_ref)/abs(S_ref)
 rel_Sx = abs(Sx_qbx - Sx_ref)/abs(Sx_ref)

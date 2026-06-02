@@ -19,13 +19,14 @@ P = opts.P;
 nch_lam_dya = opts.nch_lam_dya;
 nch_t_dya = opts.nch_t_dya;
 k_dya = opts.k_dya;
-is_grad = opts.is_grad;
+add_grad = opts.add_grad;
+use_qbx = true;
 fact = 1/2;
 
 
 
 N = nch1 * nch2 * k^2;
-ncomp = 1 + 2*is_grad;
+ncomp = 1 + 3*add_grad;
 row = complex(zeros(ncomp, N));
 patch_idx = @(i, j) ((j-1)*nch1 + (i-1))*k^2 + (1:k^2);
 
@@ -85,7 +86,7 @@ for ii = 1:numel(I_near)
         [Wlam, Wt] = ndgrid(wlam_i, wt_j);
         xq = gm_j(:, q_idx) .* Lam(:).';
         w_node = Lam(:) .* jc_j(q_idx.') .* Wlam(:) .* Wt(:);
-        contrib = direct_kernel(xq, w_node, xt, zk, is_grad);
+        contrib = direct_block(xt, xq, w_node, zk, add_grad);
         row(:, patch_idx(i, j)) = row(:, patch_idx(i, j)) - contrib;
     end
 end
@@ -215,7 +216,7 @@ for is = 1:nlam_sub
         [WLAM_S, WT_S] = ndgrid(wlam_s, wt_s);
         pos_s = gm_s(:, q_idx_s) .* LAM_S(:).';
         w_node_s = LAM_S(:) .* jc_s(q_idx_s.') .* WLAM_S(:) .* WT_S(:);
-        contrib = direct_kernel(pos_s, w_node_s, xt, zk, is_grad);
+        contrib = direct_block(xt, pos_s, w_node_s, zk, add_grad);
         row(:, patch_idx(i_par, j_par)) = row(:, patch_idx(i_par, j_par)) + contrib*M_synth;
     end
 end
@@ -297,83 +298,93 @@ end
 [LAM_DYA, ~] = ndgrid(lam_all, t_all);
 [WLAM_DYA, WT_DYA] = ndgrid(wlam_all, wt_all);
 xs = gm_t_all(:, q_flat.') .* lam_all(p_flat).';
-w_geo = LAM_DYA(:) .* jc_t_all(q_flat) .* WLAM_DYA(:) .* WT_DYA(:);
+w_geo = LAM_DYA(:) .* jc_t_all(q_flat) .* WLAM_DYA(:) .* WT_DYA(:) / (4*pi);
 
 
-% estimate distance from the target to the merged qbx panel boundary
-ns = 50;
-tt_s = linspace(tL_qbx, tR_qbx, ns);
-ll_s = linspace(lamL_qbx, lamR_qbx, ns);
-g_edge = zeros(3, ns);
-for ie = 1:ns
-    g_edge(:, ie) = D.gamma(mod(tt_s(ie), 2*pi));
-end
-gL = D.gamma(mod(tL_qbx, 2*pi));
-gR = D.gamma(mod(tR_qbx, 2*pi));
-bd = [lamL_qbx*g_edge, lamR_qbx*g_edge, gL*ll_s, gR*ll_s];
-delta = fact * min(vecnorm(bd - xt, 2, 1));
+% contribution of each dyadic node
+w_qbx = complex(zeros(len, ncomp));
 
-g_star = D.gamma(mod(t, 2*pi));
-dg_star = D.dgamma(mod(t, 2*pi));
-cp_star = cross(g_star, dg_star);
-nhat = cp_star/norm(cp_star);
-xs_star = lam * g_star;
-sgn = sign(dot(nhat, xt - xs_star));
-if sgn == 0
-    sgn = 1;
-end
-ndir = nhat * sgn;
+if use_qbx
+    ns = 50;
+    tt_s = linspace(tL_qbx, tR_qbx, ns);
+    ll_s = linspace(lamL_qbx, lamR_qbx, ns);
+    g_edge = zeros(3, ns);
+    for ie = 1:ns
+        g_edge(:, ie) = D.gamma(mod(tt_s(ie), 2*pi));
+    end
+    gL = D.gamma(mod(tL_qbx, 2*pi));
+    gR = D.gamma(mod(tR_qbx, 2*pi));
+    bd = [lamL_qbx*g_edge, lamR_qbx*g_edge, gL*ll_s, gR*ll_s];
+    delta = fact * min(vecnorm(bd - xt, 2, 1));
 
-% find the expansion center for xt
-ctr = xt + delta * ndir;
-rx = norm(xt - ctr);
-dx_unit = (xt - ctr)/rx;
-dy = xs - ctr;
-ry = vecnorm(dy, 2, 1);
-cs_ang = sum(dy.*(xt - ctr), 1)./(ry*rx);
+    g_star = D.gamma(mod(t, 2*pi));
+    dg_star = D.dgamma(mod(t, 2*pi));
+    cp_star = cross(g_star, dg_star);
+    nhat = cp_star/norm(cp_star);
+    xs_star = lam * g_star;
+    sgn = sign(dot(nhat, xt - xs_star));
+    if sgn == 0
+        sgn = 1;
+    end
+    ndir = nhat * sgn;
 
+    ctr = xt + delta * ndir;
+    rx = norm(xt - ctr);
+    dx_unit = (xt - ctr)/rx;
+    dy = xs - ctr;
+    ry = vecnorm(dy, 2, 1);
+    cs_ang = sum(dy.*(xt - ctr), 1)./(ry*rx);
 
-if ~is_grad
-    Pall = legeeval(cs_ang, P);
+    if add_grad
+        [Pall, Pall_prime] = legeeval_with_deriv(cs_ang, P);
+    else
+        Pall = legeeval(cs_ang, P);
+    end
+
     if is_laplace
         n_vec = 0:P;
         radial = (rx.^n_vec)./(ry(:).^(n_vec + 1));
-        w_qbx = w_geo.*sum(Pall.*radial, 2);
+        w_qbx(:, 1) = w_geo.*sum(Pall.*radial, 2);
+        if add_grad
+            radial_d = (n_vec.*rx.^(n_vec - 1))./(ry(:).^(n_vec + 1));
+            radial_sum = sum(Pall.*radial_d, 2);
+            angular_sum = sum(Pall_prime.*radial, 2);
+            pref = w_geo;
+        end
     else
         jn_rx = sph_jn(zk*rx, P);
         hn_ry = sph_h1(zk*ry, P);
-        coefs = (1j*zk)*((2*(0:P) + 1).'.*jn_rx);
         M = Pall.*hn_ry.';
-        w_qbx = w_geo.*(M*coefs);
+        coefs = (1j*zk)*((2*(0:P) + 1).'.*jn_rx);
+        w_qbx(:, 1) = w_geo.*(M*coefs);
+        if add_grad
+            jn_ext = sph_jn(zk*rx, P+1);
+            jn_rx_prime = sph_jn_deriv(zk*rx, P, jn_ext);
+            n_vec = (0:P).';
+            radial_sum = M*((2*n_vec + 1).*(zk*jn_rx_prime));
+            angular_sum = (Pall_prime.*hn_ry.')*((2*n_vec + 1).*jn_rx);
+            pref = (1j*zk)*w_geo;
+        end
+    end
+
+    if add_grad
+        radial_term = radial_sum - (cs_ang(:)/rx).*angular_sum;
+        inv_rxry = 1./(rx*ry(:));
+        for d = 1:3
+            w_qbx(:, 1+d) = pref.*(dx_unit(d)*radial_term + dy(d, :).'.*inv_rxry.*angular_sum);
+        end
     end
 else
-
-    [Pall, Pall_prime] = legeeval_with_deriv(cs_ang, P);
-    if is_laplace
-        n_vec = 0:P;
-        radial = (rx.^n_vec)./(ry(:).^(n_vec + 1));
-        radial_d = (n_vec.*rx.^(n_vec - 1))./(ry(:).^(n_vec + 1));
-        radial_sum = sum(Pall.*radial_d, 2);
-        angular_sum = sum(Pall_prime.*radial, 2);
-        pref = w_geo;
-    else
-        jn_rx = sph_jn(zk*rx, P);
-        jn_ext = sph_jn(zk*rx, P+1);
-        jn_rx_prime = sph_jn_deriv(zk*rx, P, jn_ext);
-        hn_ry = sph_h1(zk*ry, P);
-        n_vec = (0:P).';
-        radial_coefs = (2*n_vec + 1).*(zk*jn_rx_prime);
-        angular_coefs = (2*n_vec + 1).*jn_rx;
-        radial_sum = (Pall.*hn_ry.')*radial_coefs;
-        angular_sum = (Pall_prime.*hn_ry.')*angular_coefs;
-        pref = (1j*zk)*w_geo;
-    end
-    radial_term = radial_sum - (cs_ang(:)/rx).*angular_sum;
-    inv_rxry = 1./(rx*ry(:));
-    w_qbx = complex(zeros(len, 3));
-    for d_comp = 1:3
-        w_qbx(:, d_comp) = pref.*(dx_unit(d_comp)*radial_term ...
-            + dy(d_comp, :).'.*inv_rxry.*angular_sum);
+    
+    df = xt - xs;
+    r = vecnorm(df, 2, 1).';
+    eikr = exp(1i*zk*r);
+    w_qbx(:, 1) = w_geo.*(eikr./r);
+    if add_grad
+        coef = (1i*zk*r - 1).*eikr./r.^3;
+        for d = 1:3
+            w_qbx(:, 1+d) = w_geo.*coef.*df(d, :).';
+        end
     end
 end
 
@@ -424,20 +435,11 @@ end
 end
 
 
-function kvals = direct_kernel(xq, w_node, xt, zk, is_grad)
-df = xt - xq;
-r = vecnorm(df, 2, 1);
-wn = w_node(:).';
-if is_grad
-    coef = (1i*zk*r - 1).*exp(1i*zk*r)./r.^3;
-    coef(~isfinite(coef)) = 0;
-    kvals = complex(zeros(3, numel(r)));
-    for d = 1:3
-        kvals(d, :) = (coef.*df(d, :)).*wn;
-    end
+function contrib = direct_block(xt, xq, w_node, zk, add_grad)
+[Sv, Sx, Sy, Sz] = slp_grad(xt, xq, w_node, zk);
+if add_grad
+    contrib = [Sv.'; Sx.'; Sy.'; Sz.'];
 else
-    kern = exp(1i*zk*r)./r;
-    kern(~isfinite(kern)) = 0;
-    kvals = kern.*wn;
+    contrib = Sv.';
 end
 end
