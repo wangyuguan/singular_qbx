@@ -20,7 +20,6 @@ nch_lam_dya = opts.nch_lam_dya;
 nch_t_dya = opts.nch_t_dya;
 k_dya = opts.k_dya;
 add_grad = opts.add_grad;
-use_qbx = true;
 fact = 1/2;
 
 
@@ -297,96 +296,84 @@ end
 
 [LAM_DYA, ~] = ndgrid(lam_all, t_all);
 [WLAM_DYA, WT_DYA] = ndgrid(wlam_all, wt_all);
-xs = gm_t_all(:, q_flat.') .* lam_all(p_flat).';
-w_geo = LAM_DYA(:) .* jc_t_all(q_flat) .* WLAM_DYA(:) .* WT_DYA(:) / (4*pi);
+xs = gm_t_all(:, q_flat.').*lam_all(p_flat).';
+w_geo = LAM_DYA(:).*jc_t_all(q_flat).*WLAM_DYA(:).*WT_DYA(:)/(4*pi);
 
 
 % contribution of each dyadic node
 w_qbx = complex(zeros(len, ncomp));
 
-if use_qbx
-    ns = 50;
-    tt_s = linspace(tL_qbx, tR_qbx, ns);
-    ll_s = linspace(lamL_qbx, lamR_qbx, ns);
-    g_edge = zeros(3, ns);
-    for ie = 1:ns
-        g_edge(:, ie) = D.gamma(mod(tt_s(ie), 2*pi));
-    end
-    gL = D.gamma(mod(tL_qbx, 2*pi));
-    gR = D.gamma(mod(tR_qbx, 2*pi));
-    bd = [lamL_qbx*g_edge, lamR_qbx*g_edge, gL*ll_s, gR*ll_s];
-    delta = fact * min(vecnorm(bd - xt, 2, 1));
 
-    g_star = D.gamma(mod(t, 2*pi));
-    dg_star = D.dgamma(mod(t, 2*pi));
-    cp_star = cross(g_star, dg_star);
-    nhat = cp_star/norm(cp_star);
-    xs_star = lam * g_star;
-    sgn = sign(dot(nhat, xt - xs_star));
-    if sgn == 0
-        sgn = 1;
-    end
-    ndir = nhat * sgn;
+ns = 50;
+tt_s = linspace(tL_qbx, tR_qbx, ns);
+ll_s = linspace(lamL_qbx, lamR_qbx, ns);
+g_edge = zeros(3, ns);
+for ie = 1:ns
+    g_edge(:, ie) = D.gamma(mod(tt_s(ie), 2*pi));
+end
+gL = D.gamma(mod(tL_qbx, 2*pi));
+gR = D.gamma(mod(tR_qbx, 2*pi));
+bd = [lamL_qbx*g_edge, lamR_qbx*g_edge, gL*ll_s, gR*ll_s];
+delta = fact * min(vecnorm(bd - xt, 2, 1));
 
-    ctr = xt + delta * ndir;
-    rx = norm(xt - ctr);
-    dx_unit = (xt - ctr)/rx;
-    dy = xs - ctr;
-    ry = vecnorm(dy, 2, 1);
-    cs_ang = sum(dy.*(xt - ctr), 1)./(ry*rx);
+g_star = D.gamma(mod(t, 2*pi));
+dg_star = D.dgamma(mod(t, 2*pi));
+cp_star = cross(g_star, dg_star);
+nhat = cp_star/norm(cp_star);
+xs_star = lam * g_star;
+sgn = sign(dot(nhat, xt - xs_star));
+if sgn == 0
+    sgn = 1;
+end
+ndir = nhat * sgn;
 
+ctr = xt + delta * ndir;
+rx = norm(xt - ctr);
+dx_unit = (xt - ctr)/rx;
+dy = xs - ctr;
+ry = vecnorm(dy, 2, 1);
+cs_ang = sum(dy.*(xt - ctr), 1)./(ry*rx);
+
+if add_grad
+    [Pall, Pall_prime] = legeeval_with_deriv(cs_ang, P);
+else
+    Pall = legeeval(cs_ang, P);
+end
+
+if is_laplace
+    n_vec = 0:P;
+    radial = (rx.^n_vec)./(ry(:).^(n_vec + 1));
+    w_qbx(:, 1) = w_geo.*sum(Pall.*radial, 2);
     if add_grad
-        [Pall, Pall_prime] = legeeval_with_deriv(cs_ang, P);
-    else
-        Pall = legeeval(cs_ang, P);
-    end
-
-    if is_laplace
-        n_vec = 0:P;
-        radial = (rx.^n_vec)./(ry(:).^(n_vec + 1));
-        w_qbx(:, 1) = w_geo.*sum(Pall.*radial, 2);
-        if add_grad
-            radial_d = (n_vec.*rx.^(n_vec - 1))./(ry(:).^(n_vec + 1));
-            radial_sum = sum(Pall.*radial_d, 2);
-            angular_sum = sum(Pall_prime.*radial, 2);
-            pref = w_geo;
-        end
-    else
-        jn_rx = sph_jn(zk*rx, P);
-        hn_ry = sph_h1(zk*ry, P);
-        M = Pall.*hn_ry.';
-        coefs = (1j*zk)*((2*(0:P) + 1).'.*jn_rx);
-        w_qbx(:, 1) = w_geo.*(M*coefs);
-        if add_grad
-            jn_ext = sph_jn(zk*rx, P+1);
-            jn_rx_prime = sph_jn_deriv(zk*rx, P, jn_ext);
-            n_vec = (0:P).';
-            radial_sum = M*((2*n_vec + 1).*(zk*jn_rx_prime));
-            angular_sum = (Pall_prime.*hn_ry.')*((2*n_vec + 1).*jn_rx);
-            pref = (1j*zk)*w_geo;
-        end
-    end
-
-    if add_grad
-        radial_term = radial_sum - (cs_ang(:)/rx).*angular_sum;
-        inv_rxry = 1./(rx*ry(:));
-        for d = 1:3
-            w_qbx(:, 1+d) = pref.*(dx_unit(d)*radial_term + dy(d, :).'.*inv_rxry.*angular_sum);
-        end
+        radial_d = (n_vec.*rx.^(n_vec - 1))./(ry(:).^(n_vec + 1));
+        radial_sum = sum(Pall.*radial_d, 2);
+        angular_sum = sum(Pall_prime.*radial, 2);
+        pref = w_geo;
     end
 else
-    
-    df = xt - xs;
-    r = vecnorm(df, 2, 1).';
-    eikr = exp(1i*zk*r);
-    w_qbx(:, 1) = w_geo.*(eikr./r);
+    jn_rx = sph_jn(zk*rx, P);
+    hn_ry = sph_h1(zk*ry, P);
+    M = Pall.*hn_ry.';
+    coefs = (1j*zk)*((2*(0:P) + 1).'.*jn_rx);
+    w_qbx(:, 1) = w_geo.*(M*coefs);
     if add_grad
-        coef = (1i*zk*r - 1).*eikr./r.^3;
-        for d = 1:3
-            w_qbx(:, 1+d) = w_geo.*coef.*df(d, :).';
-        end
+        jn_ext = sph_jn(zk*rx, P+1);
+        jn_rx_prime = sph_jn_deriv(zk*rx, P, jn_ext);
+        n_vec = (0:P).';
+        radial_sum = M*((2*n_vec + 1).*(zk*jn_rx_prime));
+        angular_sum = (Pall_prime.*hn_ry.')*((2*n_vec + 1).*jn_rx);
+        pref = (1j*zk)*w_geo;
     end
 end
+
+if add_grad
+    radial_term = radial_sum - (cs_ang(:)/rx).*angular_sum;
+    inv_rxry = 1./(rx*ry(:));
+    for d = 1:3
+        w_qbx(:, 1+d) = pref.*(dx_unit(d)*radial_term + dy(d, :).'.*inv_rxry.*angular_sum);
+    end
+end
+
 
 
 W2 = reshape(w_qbx, n_lam_all, n_t_all, ncomp);
