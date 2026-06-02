@@ -42,7 +42,7 @@ D_J = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma,...
     t_splits, 1/2);
 nb = size(D_rho.src_xyz, 2);
 
-norder = 6;
+norder = 8;
 inner_src = geometries.disk([1, 1], [], [4 4 4], norder);
 inner_src = scale(inner_src, lam_inner);
 ni = inner_src.npts;

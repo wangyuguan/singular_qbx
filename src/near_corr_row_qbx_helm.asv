@@ -24,10 +24,10 @@ fact = 1/2;
 
 
 
-N = nch1*nch2*k^2;
-ncomp = 1+3*add_grad;
+N = nch1 * nch2 * k^2;
+ncomp = 1 + 3*add_grad;
 row = complex(zeros(ncomp, N));
-patch_idx = @(i, j) ((j-1)*nch1+(i-1))*k^2+(1:k^2);
+patch_idx = @(i, j) ((j-1)*nch1 + (i-1))*k^2 + (1:k^2);
 
 
 % find the near panels whose contributions need to be corrected
@@ -173,7 +173,7 @@ for is = 1:nlam_sub
     lam_mid = (a + b) / 2;
     i_par = find(lam_splits <= lam_mid, 1, 'last');
     i_par = min(max(i_par, 1), nch1);
-    t_lam = 2*(lam_s - lam_splits(i_par))/(lam_splits(i_par+1)-lam_splits(i_par)) - 1;
+    t_lam = 2*(lam_s - lam_splits(i_par)) / (lam_splits(i_par+1) - lam_splits(i_par)) - 1;
     if D.is_edge(i_par) == 1
         Vr = jacobieval(t_lam, alpha, 0, k-1);
         Lr = diag((1 - lam_s).^alpha) * Vr;
@@ -377,6 +377,8 @@ end
 
 
 W2 = reshape(w_qbx, n_lam_all, n_t_all, ncomp);
+
+x(t) = lamda * gamma(t)
 
 A_t_all = cell(nt_dya, 1);
 jpar_all = zeros(nt_dya, 1);

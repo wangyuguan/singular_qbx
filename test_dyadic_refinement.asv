@@ -1,0 +1,113 @@
+clear 
+clc 
+
+addpath src/
+dens = @(t) cos(t.^2+1)+2*sin(t/2);
+kern = @(t,s) -(1/2/pi)*log(abs(t-s));
+
+
+xt = 0.001*2*pi;
+h = min(abs(xt), abs(2*pi-xt))/2;
+c = xt+1i*h;
+
+% true value
+fval1 = integral(@(s) kern(xt,s).*dens(s), 0, xt, "AbsTol", 1e-12, "RelTol", 1e-12);
+fval2 = integral(@(s) kern(xt,s).*dens(s), xt, 2*pi, "AbsTol", 1e-12, "RelTol", 1e-12);
+fval = fval1 + fval2;
+
+% determine P 
+epsn = 1e-8;
+inttol = 1e-10; 
+Pmax = 100;
+val = 0;
+alph_true = zeros(1,Pmax+1);
+for p=0:Pmax
+    
+    if p==0
+        fun = @(s) log(s-c).*dens(s);
+        alph = integral(fun, 0, 2*pi, "AbsTol", inttol, "RelTol", inttol); 
+        alph = -1/(2*pi)*alph;
+    else
+        fun = @(s) (s-c).^(-p).*dens(s);
+        alph = integral(fun, 0, 2*pi, "AbsTol", inttol, "RelTol", inttol); 
+        alph = 1/(2*pi*p)*alph;
+    end
+    alph_true(p+1) = alph;
+    val = val+real(alph*(xt-c).^p);
+
+    if abs(val-fval)/abs(fval)<epsn
+        break 
+    end
+end
+
+fprintf('truncation error = %6d\n', abs(val-fval)/abs(fval));
+
+P = p;
+fprintf('P = %d\n', P);
+alph_true = alph_true(1:P+1);
+
+% dyadic refinement
+r = .1;
+tol_len = r*h;
+L = xt;
+R = 2*pi - xt;
+left_nodes = 0;
+right_nodes = 2*pi;
+while L > tol_len
+    L = L/2;
+    left_nodes = [left_nodes, xt - L];
+end
+while R > tol_len
+    R = R/2;
+    right_nodes = [xt + R, right_nodes];
+end
+panels = [left_nodes, right_nodes];
+panels = sort(unique(panels));
+
+
+figure
+hold on
+plot([0, 2*pi], [0, 0], 'k-', 'LineWidth', 1.5)
+h1 = plot(panels, zeros(size(panels)), '*');
+h2 = plot(xt, 0, '+');
+h3 = plot(real(c), imag(c), 'o');
+h4 = plot([xt, real(c)], [0, imag(c)], 'm--', 'LineWidth', 1);
+legend([h1 h2 h3 h4], {'panel boundaries', 'target', 'expansion center',...
+    'center line'})
+axis equal
+grid on
+
+
+
+q = 8;
+xs = zeros(1, q*(length(panels)-1));
+ws = zeros(1, q*(length(panels)-1));
+for j=1:length(panels)-1
+    a = panels(j);
+    b = panels(j+1);
+    [x, w] = lgwt(q, a, b);
+    idx = (j-1)*q+1 : j*q;
+    xs(idx) = x;
+    ws(idx) = w;
+end
+fprintf('number of upsampled nodes for qbx = %d\n', numel(xs));
+
+
+alph_qbx = zeros(size(alph_true));
+val_qbx = 0;
+for p=0:P
+    if p==0
+        kvals = log(xs-c).*dens(xs).*ws;
+        alph = -1/(2*pi)*sum(kvals);
+    else
+        kvals = (xs-c).^(-p).*dens(xs).*ws;
+        alph = 1/(2*pi*p)*sum(kvals);
+    end
+    alph_qbx(p+1) = alph;
+    val_qbx = val_qbx + real(alph*(xt-c).^p);
+end
+
+term_err = max(abs((alph_qbx-alph_true).*(xt-c).^(0:P)));
+fprintf('quandrature error on coefficient = %6d\n', term_err/P);
+
+fprintf('qbx error = %6d\n', abs(val_qbx-fval) / abs(fval))

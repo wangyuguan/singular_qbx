@@ -13,7 +13,7 @@ nch2 = 24;
 gamma = @(t) [cos(t); sin(t); 0];
 dgamma = @(t) [-sin(t); cos(t); 0];
 t_splits = linspace(0, 2*pi, nch2+1);
-angfun = @(th) 1 + 0.4*cos(th) + 0.3*sin(2*th);
+angfun = @(th) 1+0.4*cos(th)+0.3*sin(2*th);
 
 lam_t = 0.978;
 t_t = 2*pi*rand;
@@ -70,6 +70,7 @@ coefs = (1i*zk*dvec - 1).*exp(1i*zk*dvec)./(4*pi*dvec.^3);
 
 opts.add_grad = true;
 Q = precompute_helm_qbx_corr(x, lam_t, t_t, D, opts, zk);
+ 
 S_qbx = sum(wgt.*G) + Q.S*sigma;
 Sx_qbx = sum(wgt.*coefs.*df(1, :).') + Q.Sx*sigma;
 Sy_qbx = sum(wgt.*coefs.*df(2, :).') + Q.Sy*sigma;
