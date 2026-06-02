@@ -5,7 +5,7 @@ addpath('src/')
 rng(1)
 
 zk = 1.0;
-lam_inner = 0.9;
+lam_inner = 0.8999;
 k = 8;
 nch1 = 2;
 nch2 = 24;

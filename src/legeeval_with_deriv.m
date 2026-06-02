@@ -5,7 +5,9 @@ V  = zeros(n, p+1);
 Vp = zeros(n, p+1);
 V(:,1) = 1;
 Vp(:,1) = 0;
-if p == 0, return; end
+if p == 0
+    return; 
+end
 V(:,2) = x;
 Vp(:,2) = 1;
 for k = 1:p-1
