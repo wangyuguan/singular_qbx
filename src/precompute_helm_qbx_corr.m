@@ -13,7 +13,7 @@ vy_cell = cell(nt, 1);
 vz_cell = cell(nt, 1);
 
 fprintf('Precomputing correction from boundary layer\n');
-parfor t = 1:nt
+for t = 1:nt
     xt = targ_xyz(:, t);
     row_t = near_corr_row_qbx_helm(xt, lam_vec(t), t_vec(t), D, opts, zk);
     nz = find(any(row_t ~= 0, 1));

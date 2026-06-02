@@ -86,17 +86,36 @@ t_ed = D_rho.tar_t_nodes_all;
 % S and grad corrections come out of one pass per band (add_grad = true)
 opts.add_grad = true;
 
-% source on the D_J band (alpha = +1/2)
-Qbi = precompute_helm_qbx_corr(inner_src.r, lam_in, t_in, D_J, opts, zk);
-Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_J, opts, zk);
-b2i_S_J = Qbi.S;  b2i_gx_J = Qbi.Sx;  b2i_gy_J = Qbi.Sy;
-b2b_S_J = Qbb.S;  b2b_gx_J = Qbb.Sx;  b2b_gy_J = Qbb.Sy;
+% select inner targets that need correction from edge panel
+dr = (1 - lam_inner)/nch1;
+idx = find(lam_in >= lam_inner - 3*dr);
 
-% source on the D_rho band (alpha = -1/2)
-Qbi = precompute_helm_qbx_corr(inner_src.r, lam_in, t_in, D_rho, opts, zk);
+
+% source from D_J  
+QbiJ = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_J, opts, zk);
+Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_J, opts, zk);
+b2i_S_J = sparse(ni, nb);   
+b2i_S_J(idx, :) = QbiJ.S;
+b2i_gx_J = sparse(ni, nb);  
+b2i_gx_J(idx, :) = QbiJ.Sx;
+b2i_gy_J = sparse(ni, nb);  
+b2i_gy_J(idx, :) = QbiJ.Sy;
+b2b_S_J = Qbb.S;  
+b2b_gx_J = Qbb.Sx;  
+b2b_gy_J = Qbb.Sy;
+
+% source from D_rho  
+QbiR = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_rho, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_rho, opts, zk);
-b2i_S_rho = Qbi.S;  b2i_gx_rho = Qbi.Sx;  b2i_gy_rho = Qbi.Sy;
-b2b_S_rho = Qbb.S;  b2b_gx_rho = Qbb.Sx;  b2b_gy_rho = Qbb.Sy;
+b2i_S_rho = sparse(ni, nb);   
+b2i_S_rho(idx, :) = QbiR.S;
+b2i_gx_rho = sparse(ni, nb);  
+b2i_gx_rho(idx, :) = QbiR.Sx;
+b2i_gy_rho = sparse(ni, nb);  
+b2i_gy_rho(idx, :) = QbiR.Sy;
+b2b_S_rho = Qbb.S;  
+b2b_gx_rho = Qbb.Sx;  
+b2b_gy_rho = Qbb.Sy;
 
 % assemble the near-correction matrices
 M_S_J = [i2i_S.spmat, b2i_S_J; i2b_S.spmat, b2b_S_J];
