@@ -90,7 +90,7 @@ opts.add_grad = true;
 % the deep-interior ones are far enough that the smooth quadrature suffices
 dr = (1 - lam_inner)/nch1;
 idx = find(lam_in >= lam_inner - 3*dr);
-fprintf('BL correction applied to %d of %d inner targets\n', numel(idx), ni);
+
 
 % source on the D_J band (alpha = +1/2)
 QbiJ = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_J, opts, zk);
