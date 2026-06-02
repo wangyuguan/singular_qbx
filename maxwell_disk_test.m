@@ -1,10 +1,10 @@
 clear 
 clc 
 
-run('../fmm3dbie_hirax/matlab/startup.m')
-addpath('../FMM3D/matlab/')
-run('../FLAM/startup.m')
-addpath('../chebfun')
+run('../../software/fmm3dbie_hirax/matlab/startup.m')
+addpath('../../software/FMM3D/matlab/')
+run('../../software/FLAM/startup.m')
+addpath('../../software/chebfun')
 addpath('src/')
 
 
@@ -86,36 +86,27 @@ t_ed = D_rho.tar_t_nodes_all;
 % S and grad corrections come out of one pass per band (add_grad = true)
 opts.add_grad = true;
 
-% select inner targets that need correction from edge panel
+% only inner targets close to the band need a boundary-layer correction;
+% the deep-interior ones are far enough that the smooth quadrature suffices
 dr = (1 - lam_inner)/nch1;
 idx = find(lam_in >= lam_inner - 3*dr);
+fprintf('BL correction applied to %d of %d inner targets\n', numel(idx), ni);
 
-
-% source from D_J  
+% source on the D_J band (alpha = +1/2)
 QbiJ = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_J, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_J, opts, zk);
-b2i_S_J = sparse(ni, nb);   
-b2i_S_J(idx, :) = QbiJ.S;
-b2i_gx_J = sparse(ni, nb);  
-b2i_gx_J(idx, :) = QbiJ.Sx;
-b2i_gy_J = sparse(ni, nb);  
-b2i_gy_J(idx, :) = QbiJ.Sy;
-b2b_S_J = Qbb.S;  
-b2b_gx_J = Qbb.Sx;  
-b2b_gy_J = Qbb.Sy;
+b2i_S_J = sparse(ni, nb);   b2i_S_J(idx, :) = QbiJ.S;
+b2i_gx_J = sparse(ni, nb);  b2i_gx_J(idx, :) = QbiJ.Sx;
+b2i_gy_J = sparse(ni, nb);  b2i_gy_J(idx, :) = QbiJ.Sy;
+b2b_S_J = Qbb.S;  b2b_gx_J = Qbb.Sx;  b2b_gy_J = Qbb.Sy;
 
-% source from D_rho  
+% source on the D_rho band (alpha = -1/2)
 QbiR = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_rho, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_rho, opts, zk);
-b2i_S_rho = sparse(ni, nb);   
-b2i_S_rho(idx, :) = QbiR.S;
-b2i_gx_rho = sparse(ni, nb);  
-b2i_gx_rho(idx, :) = QbiR.Sx;
-b2i_gy_rho = sparse(ni, nb);  
-b2i_gy_rho(idx, :) = QbiR.Sy;
-b2b_S_rho = Qbb.S;  
-b2b_gx_rho = Qbb.Sx;  
-b2b_gy_rho = Qbb.Sy;
+b2i_S_rho = sparse(ni, nb);   b2i_S_rho(idx, :) = QbiR.S;
+b2i_gx_rho = sparse(ni, nb);  b2i_gx_rho(idx, :) = QbiR.Sx;
+b2i_gy_rho = sparse(ni, nb);  b2i_gy_rho(idx, :) = QbiR.Sy;
+b2b_S_rho = Qbb.S;  b2b_gx_rho = Qbb.Sx;  b2b_gy_rho = Qbb.Sy;
 
 % assemble the near-correction matrices
 M_S_J = [i2i_S.spmat, b2i_S_J; i2b_S.spmat, b2b_S_J];
@@ -165,8 +156,26 @@ i2e_grad = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, targinfo_eval);
 lam_e = sqrt(eval_xyz(1, :).^2 + eval_xyz(2, :).^2);
 t_e = mod(atan2(eval_xyz(2, :), eval_xyz(1, :)), 2*pi).';
 opts.add_grad = true;
-Qe_J = precompute_helm_qbx_corr(eval_xyz, lam_e, t_e, D_J, opts, zk);
-Qe_rho = precompute_helm_qbx_corr(eval_xyz, lam_e, t_e, D_rho, opts, zk);
+
+% same distance criterion: only eval points near the band get a BL correction
+nev = size(eval_xyz, 2);
+idx_e = find(lam_e >= lam_inner - 3*dr);
+
+QeJ = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_J, opts, zk);
+Qe_J.S = sparse(nev, nb);   
+Qe_J.S(idx_e, :) = QeJ.S;
+Qe_J.Sx = sparse(nev, nb);  
+Qe_J.Sx(idx_e, :) = QeJ.Sx;
+Qe_J.Sy = sparse(nev, nb);  
+Qe_J.Sy(idx_e, :) = QeJ.Sy;
+
+QeR = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_rho, opts, zk);
+Qe_rho.S = sparse(nev, nb);   
+Qe_rho.S(idx_e, :) = QeR.S;
+Qe_rho.Sx = sparse(nev, nb);  
+Qe_rho.Sx(idx_e, :) = QeR.Sx;
+Qe_rho.Sy = sparse(nev, nb);  
+Qe_rho.Sy(idx_e, :) = QeR.Sy;
 
 [S_Ju, ~, ~] = eval_layer(J_u, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, Qe_J);
 [S_Jv, ~, ~] = eval_layer(J_v, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, Qe_J);
