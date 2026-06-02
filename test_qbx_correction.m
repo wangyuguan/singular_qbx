@@ -1,5 +1,5 @@
 clear; clc;
-addpath('../../software/chebfun')
+addpath('../chebfun')
 addpath('src/')
 
 rng(1)

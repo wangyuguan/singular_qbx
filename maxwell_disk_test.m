@@ -1,10 +1,10 @@
 clear 
 clc 
 
-run('../../software/fmm3dbie_hirax/matlab/startup.m')
-addpath('../../software/FMM3D/matlab/')
-run('../../software/FLAM/startup.m')
-addpath('../../software/chebfun')
+run('../fmm3dbie_hirax/matlab/startup.m')
+addpath('../FMM3D/matlab/')
+run('../FLAM/startup.m')
+addpath('../chebfun')
 addpath('src/')
 
 
