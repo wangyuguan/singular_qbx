@@ -340,7 +340,7 @@ if ~is_grad
         radial = (rx.^n_vec)./(ry(:).^(n_vec + 1));
         w_qbx = w_geo.*sum(Pall.*radial, 2);
     else
-        [jn_rx, ~] = sph_bessel_h1(zk*rx, P);
+        jn_rx = sph_jn(zk*rx, P);
         hn_ry = sph_h1(zk*ry, P);
         coefs = (1j*zk)*((2*(0:P) + 1).'.*jn_rx);
         M = Pall.*hn_ry.';
@@ -357,8 +357,8 @@ else
         angular_sum = sum(Pall_prime.*radial, 2);
         pref = w_geo;
     else
-        [jn_rx, ~] = sph_bessel_h1(zk*rx, P);
-        jn_ext = sph_bessel_h1(zk*rx, P+1);
+        jn_rx = sph_jn(zk*rx, P);
+        jn_ext = sph_jn(zk*rx, P+1);
         jn_rx_prime = sph_jn_deriv(zk*rx, P, jn_ext);
         hn_ry = sph_h1(zk*ry, P);
         n_vec = (0:P).';
