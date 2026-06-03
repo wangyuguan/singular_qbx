@@ -118,12 +118,12 @@ Afun = @(i, j) efie2_sysmat_handle(i, j, target_xyz, ...
     src_xyz_J, src_w_J, M_S_J, M_gx_J, M_gy_J, ...
     src_xyz_rho, src_w_rho, M_S_rho, M_gx_rho, M_gy_rho, zk, N);
 
-rx = [target_xyz(1:2, :), target_xyz(1:2, :), target_xyz(1:2, :);
-      zeros(1, N), 10*ones(1, N),  20*ones(1, N)];
-cx = [src_xyz_J(1:2, :),  src_xyz_J(1:2, :),  src_xyz_rho(1:2, :);
-      zeros(1, N), 10*ones(1, N), 20*ones(1, N)];
-occ = 400;
-rtol = 1e-10;
+
+rx = [target_xyz, target_xyz, target_xyz];      
+cx = [src_xyz_J,  src_xyz_J,  src_xyz_rho];
+
+occ = 500;
+rtol = 1e-8;
 fopts = [];
 fopts.verb = 1;
 fopts.symm = 'n';
@@ -151,3 +151,67 @@ if 1==0
     rel_err = norm(y_rskel - y_true)/norm(y_true);
     fprintf('relative error of rskel forward map is %.2d\n', rel_err)
 end
+
+
+[Asp, pp, qq] = rskel_xsp(F);
+[L, U, P] = lu(Asp);
+rhs_ext = [rhs(pp); zeros(size(Asp, 1) - N*3, 1)];
+sol_ext = U\(L\(P*rhs_ext));
+xsol = sol_ext(1:N*3);
+xsol(qq) = xsol;
+
+
+Jx = xsol(1:N);
+Jy = xsol(N+1:2*N);
+rho = xsol(2*N+1:3*N);
+
+
+
+ne = 5;
+th_i = 2*pi*rand(1, ne);
+r_i = 0.2 + 0.6*rand(1, ne);
+th_b = 2*pi*rand(1, ne);
+r_b = lam_inner + (1 - lam_inner)*(0.1 + 0.8*rand(1, ne));
+eval_xy = [r_i.*cos(th_i), r_b.*cos(th_b);
+    r_i.*sin(th_i), r_b.*sin(th_b)];
+eval_xyz = [eval_xy; zeros(1, 2*ne)];
+
+targinfo_eval = struct('r', eval_xyz);
+i2e_S = helm3d.dirichlet.get_quad_cor_sub(inner_src, eps_fmm, zk, [1, 0], targinfo_eval);
+i2e_grad = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, targinfo_eval);
+
+lam_e = sqrt(eval_xyz(1, :).^2 + eval_xyz(2, :).^2);
+t_e = mod(atan2(eval_xyz(2, :), eval_xyz(1, :)), 2*pi).';
+opts.add_grad = true;
+
+
+nev = size(eval_xyz, 2);
+idx_e = find(lam_e >= lam_inner - 3*dr);
+
+QeJ = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_J, opts, zk);
+Qe_J.S = sparse(nev, nb);   
+Qe_J.S(idx_e, :) = QeJ.S;
+Qe_J.Sx = sparse(nev, nb);  
+Qe_J.Sx(idx_e, :) = QeJ.Sx;
+Qe_J.Sy = sparse(nev, nb);  
+Qe_J.Sy(idx_e, :) = QeJ.Sy;
+
+QeR = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_rho, opts, zk);
+Qe_rho.S = sparse(nev, nb);   
+Qe_rho.S(idx_e, :) = QeR.S;
+Qe_rho.Sx = sparse(nev, nb);  
+Qe_rho.Sx(idx_e, :) = QeR.Sx;
+Qe_rho.Sy = sparse(nev, nb);  
+Qe_rho.Sy(idx_e, :) = QeR.Sy;
+
+[S_Jx, ~, ~] = eval_layer(Jx, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, Qe_J);
+[S_Jy, ~, ~] = eval_layer(Jy, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, Qe_J);
+[~, Sx_rho, Sy_rho] = eval_layer(rho, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, Qe_rho);
+
+Ex = 1i*zk*S_Jx + Sx_rho;
+Ey = 1i*zk*S_Jy + Sy_rho;
+E_inc_e = dipole_field(eval_xyz, x0, p0, zk);
+err_x = Ex + E_inc_e(1, :).';
+err_y = Ey + E_inc_e(2, :).';
+Enorm = max(abs(E_inc_e(:)));
+err = sqrt(abs(err_x).^2 + abs(err_y).^2)/Enorm
