@@ -1,4 +1,4 @@
-function row = near_corr_row_qbx_helm(xt, lam, t, D, opts, zk)
+function [row, info] = near_corr_row_qbx_helm(xt, lam, t, D, opts, zk)
 
 is_laplace = abs(zk) < 1e-12;
 
@@ -16,17 +16,18 @@ k_sub = opts.k_sub;
 n_lam_near_sub = opts.n_lam_near_sub;
 n_t_near_sub = opts.n_t_near_sub;
 P = opts.P;
-nch_lam_dya = opts.nch_lam_dya;
-nch_t_dya = opts.nch_t_dya;
 k_dya = opts.k_dya;
 add_grad = opts.add_grad;
 fact = 1/2;
+r = 1/2;
+
 
 
 
 N = nch1*nch2*k^2;
 ncomp = 1+3*add_grad;
 row = complex(zeros(ncomp, N));
+info.nqbx = 0;
 patch_idx = @(i, j) ((j-1)*nch1+(i-1))*k^2+(1:k^2);
 
 
@@ -229,8 +230,34 @@ lamR_qbx = lam_sub_splits(I_sub_near(end) + 1);
 tL_qbx = t_sub_splits(J_sub_near(1));
 tR_qbx = t_sub_splits(J_sub_near(end) + 1);
 
-lamsegs = dyadic_to_point(nch_lam_dya, lamL_qbx, lamR_qbx, lam);
-tsegs = dyadic_to_point(nch_t_dya, tL_qbx, tR_qbx, t_lift);
+% expansion radius = fact * (distance from the target to the panel boundary)
+ns = 50;
+tt_s = linspace(tL_qbx, tR_qbx, ns);
+ll_s = linspace(lamL_qbx, lamR_qbx, ns);
+g_edge = zeros(3, ns);
+for ie = 1:ns
+    g_edge(:, ie) = D.gamma(mod(tt_s(ie), 2*pi));
+end
+gL = D.gamma(mod(tL_qbx, 2*pi));
+gR = D.gamma(mod(tR_qbx, 2*pi));
+bd = [lamL_qbx*g_edge, lamR_qbx*g_edge, gL*ll_s, gR*ll_s];
+delta = fact * min(vecnorm(bd - xt, 2, 1));
+
+% halve lam and t together until the target panel diameter (max distance
+% between the 4 flat corners) drops below r * delta
+corners = [lamL_qbx*gL, lamL_qbx*gR, lamR_qbx*gL, lamR_qbx*gR];
+diam = 0;
+for a = 1:4
+    diam = max(diam, max(vecnorm(corners - corners(:, a), 2, 1)));
+end
+nch = 1;
+while diam > r*delta && nch < 30
+    diam = diam/2;
+    nch = nch + 1;
+end
+
+lamsegs = dyadic_to_point(nch, lamL_qbx, lamR_qbx, lam);
+tsegs = dyadic_to_point(nch, tL_qbx, tR_qbx, t_lift);
 
 extra_lam = lam_splits(lam_splits > lamL_qbx & lam_splits < lamR_qbx);
 lamsegs = unique([lamsegs(:); extra_lam(:)]);
@@ -281,6 +308,7 @@ wt_all = wt_mat(:);
 n_lam_all = numel(lam_all);
 n_t_all = numel(t_all);
 len = n_lam_all * n_t_all;
+info.nqbx = len;
 q_flat = floor((0:len-1)' / n_lam_all) + 1;
 p_flat = mod((0:len-1)', n_lam_all) + 1;
 
@@ -303,18 +331,6 @@ w_geo = LAM_DYA(:).*jc_t_all(q_flat).*WLAM_DYA(:).*WT_DYA(:)/(4*pi);
 % contribution of each dyadic node
 w_qbx = complex(zeros(len, ncomp));
 
-
-ns = 50;
-tt_s = linspace(tL_qbx, tR_qbx, ns);
-ll_s = linspace(lamL_qbx, lamR_qbx, ns);
-g_edge = zeros(3, ns);
-for ie = 1:ns
-    g_edge(:, ie) = D.gamma(mod(tt_s(ie), 2*pi));
-end
-gL = D.gamma(mod(tL_qbx, 2*pi));
-gR = D.gamma(mod(tR_qbx, 2*pi));
-bd = [lamL_qbx*g_edge, lamR_qbx*g_edge, gL*ll_s, gR*ll_s];
-delta = fact * min(vecnorm(bd - xt, 2, 1));
 
 g_star = D.gamma(mod(t, 2*pi));
 dg_star = D.dgamma(mod(t, 2*pi));
