@@ -26,7 +26,7 @@ i_loc = mod(I(:) - 1, N) + 1;
 j_blk = ceil(J(:)/N);
 j_loc = mod(J(:) - 1, N) + 1;
 
-% which requested rows live in the E_x, E_y, and div blocks
+% block index for E_x, E_y, and div 
 is_x = (i_blk == 1);
 is_y = (i_blk == 2);
 is_d = (i_blk == 3);

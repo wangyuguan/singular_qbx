@@ -19,7 +19,7 @@ P = opts.P;
 k_dya = opts.k_dya;
 add_grad = opts.add_grad;
 fact = 1/2;
-r = 1/2;
+r = .25;
 
 
 
@@ -255,6 +255,7 @@ while diam > r*delta && nch < 30
     diam = diam/2;
     nch = nch + 1;
 end
+% nch=nch+2;
 
 lamsegs = dyadic_to_point(nch, lamL_qbx, lamR_qbx, lam);
 tsegs = dyadic_to_point(nch, tL_qbx, tR_qbx, t_lift);

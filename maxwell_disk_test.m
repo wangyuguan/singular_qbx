@@ -80,15 +80,13 @@ edge_tar = D_rho.tar_xyz;
 lam_ed = D_rho.tar_lam_nodes_all;
 t_ed = D_rho.tar_t_nodes_all;
 
-
-% S and grad corrections come out of one pass per band (add_grad = true)
 opts.add_grad = true;
 
 dr = (1 - lam_inner)/nch1;
 idx = find(lam_in >= lam_inner - 3*dr);
 
 
-% source on the D_J nodes (alpha = +1/2)
+% source on the D_J nodes 
 QbiJ = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_J, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_J, opts, zk);
 b2i_S_J = sparse(ni, nb);   b2i_S_J(idx, :) = QbiJ.S;
@@ -96,7 +94,7 @@ b2i_gx_J = sparse(ni, nb);  b2i_gx_J(idx, :) = QbiJ.Sx;
 b2i_gy_J = sparse(ni, nb);  b2i_gy_J(idx, :) = QbiJ.Sy;
 b2b_S_J = Qbb.S;  b2b_gx_J = Qbb.Sx;  b2b_gy_J = Qbb.Sy;
 
-% source on the D_rho nodes (alpha = -1/2)
+% source on the D_rho nodes  
 QbiR = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_rho, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_rho, opts, zk);
 b2i_S_rho = sparse(ni, nb);   b2i_S_rho(idx, :) = QbiR.S;
@@ -215,3 +213,6 @@ err_x = Ex + E_inc_e(1, :).';
 err_y = Ey + E_inc_e(2, :).';
 Enorm = max(abs(E_inc_e(:)));
 err = sqrt(abs(err_x).^2 + abs(err_y).^2)/Enorm
+
+
+save('maxwell_results.mat', 'Jx', 'Jy', 'rho')
