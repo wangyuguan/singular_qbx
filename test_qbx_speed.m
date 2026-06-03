@@ -5,7 +5,7 @@ addpath('src/')
 rng(1)
 
 zk = 1.0;
-lam_inner = 0.96;
+lam_inner = 0.9;
 k = 8;
 nch1 = 2;
 nch2 = 24;
@@ -31,20 +31,22 @@ D = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, t_splits, alpha);
 
 opts.add_grad = false;
 opts.ncores = 1;
-tar = D_rho.tar_xyz;
-lam = D_rho.tar_lam_nodes_all;
-t = D_rho.tar_t_nodes_all;
+tar = D.tar_xyz;
+lam = D.tar_lam_nodes_all;
+t = D.tar_t_nodes_all;
 
 
 tic 
-[S, info] = precompute_helm_qbx_corr(tar, lam, t, D, opts, zk);
+[Q, info] = precompute_helm_qbx_corr(tar, lam, t, D, opts, zk);
 t_single = toc;
 nqbx = info.nqbx;
+S = Q.S;
 
 
 opts.ncores = 16; 
 tic 
-[S_par, ~] = precompute_helm_qbx_corr(tar, lam, t, D, opts, zk);
+[Q_par, ~] = precompute_helm_qbx_corr(tar, lam, t, D, opts, zk);
+S_par = Q_par.S;
 t_par = toc;
 
 

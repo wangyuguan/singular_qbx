@@ -5,7 +5,7 @@ addpath('src/')
 rng(1)
 
 zk = 1.0;
-lam_inner = 0.96;
+lam_inner = 0.899;
 k = 8;
 nch1 = 2;
 nch2 = 24;
@@ -28,7 +28,7 @@ opts.n_lam_near_sub = 1;
 opts.n_t_near_sub = 1;
 opts.P = 20;
 opts.k_dya = k;
-
+opts.ncores = 1;
 alpha = -0.5;
 D = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, t_splits, alpha);
 r = D.lam_nodes_all;
