@@ -28,8 +28,8 @@ j_blk = ceil(j(:)/N);
 j_loc = mod(j(:) - 1, N) + 1;
 
 for q = 1:numel(j)
-    sb = j_blk(q);     % source block
-    sj = j_loc(q);     % source local index
+    sb = j_blk(q);      
+    sj = j_loc(q);      
 
     if sb == 3
         src = src_xyz_rho(:, sj);

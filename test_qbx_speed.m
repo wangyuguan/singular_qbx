@@ -42,12 +42,14 @@ t_single = toc;
 nqbx = info.nqbx;
 S = Q.S;
 
-
 opts.ncores = 16; 
+% burn in 
+[Q_par, ~] = precompute_helm_qbx_corr(tar, lam, t, D, opts, zk);
+
+
 tic 
 [Q_par, ~] = precompute_helm_qbx_corr(tar, lam, t, D, opts, zk);
 S_par = Q_par.S;
 t_par = toc;
-
 
 save('time_info.mat', 'nqbx', 'S', 'S_par', 't_single', 't_par')
