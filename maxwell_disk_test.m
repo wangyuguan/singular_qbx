@@ -30,11 +30,9 @@ opts.nsub = 4;
 opts.k_sub = 16;
 opts.n_lam_near_sub = 1;
 opts.n_t_near_sub = 1;
-opts.P = 30;
-opts.nch_lam_dya = 12;
-opts.nch_t_dya = 16;
-opts.k_dya = 16;
-
+opts.P = 20;
+opts.k_dya = k;
+opts.ncores = 16;
 
 D_rho = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, ...
     t_splits, -1/2);
@@ -42,7 +40,7 @@ D_J = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma,...
     t_splits, 1/2);
 nb = size(D_rho.src_xyz, 2);
 
-norder = 8;
+norder = k;
 inner_src = geometries.disk([1, 1], [], [4 4 4], norder);
 inner_src = scale(inner_src, lam_inner);
 ni = inner_src.npts;
@@ -86,13 +84,11 @@ t_ed = D_rho.tar_t_nodes_all;
 % S and grad corrections come out of one pass per band (add_grad = true)
 opts.add_grad = true;
 
-% only inner targets close to the band need a boundary-layer correction;
-% the deep-interior ones are far enough that the smooth quadrature suffices
 dr = (1 - lam_inner)/nch1;
 idx = find(lam_in >= lam_inner - 3*dr);
 
 
-% source on the D_J band (alpha = +1/2)
+% source on the D_J nodes (alpha = +1/2)
 QbiJ = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_J, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_J, opts, zk);
 b2i_S_J = sparse(ni, nb);   b2i_S_J(idx, :) = QbiJ.S;
@@ -100,7 +96,7 @@ b2i_gx_J = sparse(ni, nb);  b2i_gx_J(idx, :) = QbiJ.Sx;
 b2i_gy_J = sparse(ni, nb);  b2i_gy_J(idx, :) = QbiJ.Sy;
 b2b_S_J = Qbb.S;  b2b_gx_J = Qbb.Sx;  b2b_gy_J = Qbb.Sy;
 
-% source on the D_rho band (alpha = -1/2)
+% source on the D_rho nodes (alpha = -1/2)
 QbiR = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_rho, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_rho, opts, zk);
 b2i_S_rho = sparse(ni, nb);   b2i_S_rho(idx, :) = QbiR.S;
@@ -108,7 +104,7 @@ b2i_gx_rho = sparse(ni, nb);  b2i_gx_rho(idx, :) = QbiR.Sx;
 b2i_gy_rho = sparse(ni, nb);  b2i_gy_rho(idx, :) = QbiR.Sy;
 b2b_S_rho = Qbb.S;  b2b_gx_rho = Qbb.Sx;  b2b_gy_rho = Qbb.Sy;
 
-% assemble the near-correction matrices
+% assemble the correction matrices
 M_S_J = [i2i_S.spmat, b2i_S_J; i2b_S.spmat, b2b_S_J];
 M_gx_J = [i2i_grad.spmat_x, b2i_gx_J; i2b_grad.spmat_x, b2b_gx_J];
 M_gy_J = [i2i_grad.spmat_y, b2i_gy_J; i2b_grad.spmat_y, b2b_gy_J];
@@ -117,76 +113,41 @@ M_S_rho = [i2i_S.spmat, b2i_S_rho; i2b_S.spmat, b2b_S_rho];
 M_gx_rho = [i2i_grad.spmat_x, b2i_gx_rho; i2b_grad.spmat_x, b2b_gx_rho];
 M_gy_rho = [i2i_grad.spmat_y, b2i_gy_rho; i2b_grad.spmat_y, b2b_gy_rho];
 
-% system-matrix entry handle (3N x 3N), x = [J_u; J_v; rho]
-Afun = @(i, j) sysmat_handle(i, j, target_xyz, ...
+% system-matrix entry handle 
+Afun = @(i, j) efie2_sysmat_handle(i, j, target_xyz, ...
     src_xyz_J, src_w_J, M_S_J, M_gx_J, M_gy_J, ...
     src_xyz_rho, src_w_rho, M_S_rho, M_gx_rho, M_gy_rho, zk, N);
 
-x_pts = [target_xyz(1:2, :), target_xyz(1:2, :), target_xyz(1:2, :);
-         0*ones(1, N),       1*ones(1, N),       2*ones(1, N)];
-occ = 200;
+rx = [target_xyz(1:2, :), target_xyz(1:2, :), target_xyz(1:2, :);
+      zeros(1, N), 10*ones(1, N),  20*ones(1, N)];
+cx = [src_xyz_J(1:2, :),  src_xyz_J(1:2, :),  src_xyz_rho(1:2, :);
+      zeros(1, N), 10*ones(1, N), 20*ones(1, N)];
+occ = 400;
 rtol = 1e-10;
 fopts = [];
 fopts.verb = 1;
 fopts.symm = 'n';
 fopts.Tmax = 1.5;
-F = rskelf(Afun, x_pts, occ, rtol, [], fopts);
-xsol = rskelf_sv(F, rhs);
+tic
+F = rskel(Afun, rx, cx, occ, rtol, [], fopts);
+t_rskel = toc;
+w = whos('F'); 
+mem = w.bytes/1e6;
+fprintf('rskel time/mem: %10.4e (s) / %6.2f (MB)\n', t_rskel, mem)
 
-J_u = xsol(1:N);
-J_v = xsol(N+1:2*N);
-rho = xsol(2*N+1:3*N);
+mem_dense = (3*N)^2*16/1e6; 
+compression = mem_dense/mem;
+fprintf('factor of compression is %6d\n', compression)
 
-% accuracy test 
-
-ne = 5;
-th_i = 2*pi*rand(1, ne);
-r_i = 0.2 + 0.6*rand(1, ne);                            
-th_b = 2*pi*rand(1, ne);
-r_b = lam_inner + (1 - lam_inner)*(0.1 + 0.8*rand(1, ne)); 
-eval_xy = [r_i.*cos(th_i), r_b.*cos(th_b);
-           r_i.*sin(th_i), r_b.*sin(th_b)];
-eval_xyz = [eval_xy; zeros(1, 2*ne)];
-
-
-targinfo_eval = struct('r', eval_xyz);
-i2e_S = helm3d.dirichlet.get_quad_cor_sub(inner_src, eps_fmm, zk, [1, 0], targinfo_eval);
-i2e_grad = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, targinfo_eval);
-
-lam_e = sqrt(eval_xyz(1, :).^2 + eval_xyz(2, :).^2);
-t_e = mod(atan2(eval_xyz(2, :), eval_xyz(1, :)), 2*pi).';
-opts.add_grad = true;
-
-% same distance criterion: only eval points near the band get a BL correction
-nev = size(eval_xyz, 2);
-idx_e = find(lam_e >= lam_inner - 3*dr);
-
-QeJ = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_J, opts, zk);
-Qe_J.S = sparse(nev, nb);   
-Qe_J.S(idx_e, :) = QeJ.S;
-Qe_J.Sx = sparse(nev, nb);  
-Qe_J.Sx(idx_e, :) = QeJ.Sx;
-Qe_J.Sy = sparse(nev, nb);  
-Qe_J.Sy(idx_e, :) = QeJ.Sy;
-
-QeR = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_rho, opts, zk);
-Qe_rho.S = sparse(nev, nb);   
-Qe_rho.S(idx_e, :) = QeR.S;
-Qe_rho.Sx = sparse(nev, nb);  
-Qe_rho.Sx(idx_e, :) = QeR.Sx;
-Qe_rho.Sy = sparse(nev, nb);  
-Qe_rho.Sy(idx_e, :) = QeR.Sy;
-
-[S_Ju, ~, ~] = eval_layer(J_u, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, Qe_J);
-[S_Jv, ~, ~] = eval_layer(J_v, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, Qe_J);
-[~, Sx_rho, Sy_rho] = eval_layer(rho, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, Qe_rho);
-
-Ex = 1i*zk*S_Ju + Sx_rho;
-Ey = 1i*zk*S_Jv + Sy_rho;
-E_inc_e = dipole_field(eval_xyz, x0, p0, zk);
-err_x = Ex + E_inc_e(1, :).';
-err_y = Ey + E_inc_e(2, :).';
-Enorm = max(abs(E_inc_e(:)));
-err = sqrt(abs(err_x).^2 + abs(err_y).^2)/Enorm;
-
-err 
+if 1==0
+    % check forward map accuracy 
+    f1 = @(p) 2*cos(p(1,:))+3*sin(p(2,:));
+    f2 = @(p) p(1,:).^2+p(2,:).^2;
+    f3 = @(p) (p(1,:)+p(2,:))/2;
+    Xs = [f1(src_xyz_J).'; f2(src_xyz_J).'; f3(src_xyz_rho).'];
+    y_rskel = rskel_mv(F, Xs);
+    A_true = Afun((1:3*N).', (1:3*N).');
+    y_true = A_true*Xs;
+    rel_err = norm(y_rskel - y_true)/norm(y_true);
+    fprintf('relative error of rskel forward map is %.2d\n', rel_err)
+end
