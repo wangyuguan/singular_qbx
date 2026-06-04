@@ -37,7 +37,7 @@ opts.ncores = 16;
 D_rho = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, ...
     t_splits, -1/2);
 D_J = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma,...
-    t_splits, 1/2);
+    t_splits, -1/2);
 nb = size(D_rho.src_xyz, 2);
 
 norder = k;

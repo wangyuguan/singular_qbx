@@ -1,84 +1,67 @@
-clear; clc;
-load('maxwell_disk_results.mat')
 
-th = linspace(0, 2*pi, 200);
+clear
+clc
 
-figure 
-tiledlayout(1,3)
-nexttile 
-hold on 
-scatter(src_xyz_J(1, :), src_xyz_J(2, :), 15, real(J_u), 'filled');
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-colorbar; 
-title('Re($J_1$)', Interpreter='latex', FontSize=16); 
-xlabel('$x$', Interpreter='latex', FontSize=16); 
-ylabel('$y$', Interpreter='latex', FontSize=16);
+run('../fmm3dbie_hirax/matlab/startup.m')
+addpath('../FMM3D/matlab/')
+addpath('../chebfun')
+addpath('src/')
 
-nexttile  
-hold on 
-scatter(src_xyz_J(1, :), src_xyz_J(2, :), 15, real(J_v), 'filled');
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-colorbar; 
-title('Re($J_2$)', Interpreter='latex', FontSize=16); 
-xlabel('$x$', Interpreter='latex', FontSize=16); 
-ylabel('$y$', Interpreter='latex', FontSize=16);
+load('maxwell_results.mat', 'Jx', 'Jy', 'rho')
 
 
-nexttile 
-hold on
-scatter(src_xyz_rho(1, :), src_xyz_rho(2, :), 15, real(rho), 'filled');
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-colorbar;
-title('Re($\rho$)', Interpreter='latex', FontSize=16); 
-xlabel('$x$', Interpreter='latex', FontSize=16); 
-ylabel('$y$', Interpreter='latex', FontSize=16);
+lam_inner = 0.9;
+k = 8;
+nch1 = 2;
+nch2 = 24;
+gamma = @(t) [cos(t); sin(t); 0];
+dgamma = @(t) [-sin(t); cos(t); 0];
+t_splits = linspace(0, 2*pi, nch2+1);
+
+D_rho = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, t_splits, -1/2);
+D_J = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, t_splits, 1/2);
+nb = size(D_rho.src_xyz, 2);
+
+norder = k;
+inner_src = geometries.disk([1, 1], [], [4 4 4], norder);
+inner_src = scale(inner_src, lam_inner);
+ni = inner_src.npts;
 
 
+dens = {Jx, Jy, rho};
+Dband = {D_J, D_J, D_rho};
+names = {'$J_1$', '$J_2$', '$\rho$'};
+tiny = 1e-300;
+narc = 8;
 
-figure 
-tiledlayout(1,3)
-nexttile 
-hold on 
-scatter(src_xyz_J(1, :), src_xyz_J(2, :), 15, log10(abs(J_u)), 'filled');
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-colorbar; 
-title('$\log_{10}|J_1|$', Interpreter='latex', FontSize=16); 
-xlabel('$x$', Interpreter='latex', FontSize=16); 
-ylabel('$y$', Interpreter='latex', FontSize=16);
+figure
+for d = 1:3
+    err_in = abs(inner_src.surf_fun_error(dens{d}(1:ni)));
+    err_band = edge_fun_error(Dband{d}, dens{d}(ni+1:end));
+    cl = [min(log10([err_in(:); err_band(:)] + tiny)), max(log10([err_in(:); err_band(:)] + tiny))];
 
-nexttile  
-hold on 
-scatter(src_xyz_J(1, :), src_xyz_J(2, :), 15, log10(abs(J_v)), 'filled');
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-colorbar; 
-title('$\log_{10}|J_2|$', Interpreter='latex', FontSize=16); 
-xlabel('$x$', Interpreter='latex', FontSize=16); 
-ylabel('$y$', Interpreter='latex', FontSize=16);
-
-
-nexttile 
-hold on
-scatter(src_xyz_rho(1, :), src_xyz_rho(2, :), 15, log10(abs(rho)), 'filled');
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-colorbar;
-title('$\log_{10}|\rho|$)', Interpreter='latex', FontSize=16); 
-xlabel('$x$', Interpreter='latex', FontSize=16); 
-ylabel('$y$', Interpreter='latex', FontSize=16);
-
-
-
-
-figure 
-hold on;
-plot(cos(th), sin(th), 'k-');
-plot(lam_inner*cos(th), lam_inner*sin(th), 'k:');
-scatter(eval_xyz(1, :), eval_xyz(2, :), 80, log10(err), 'filled');
-for q = 1:numel(err)
-    text(eval_xyz(1, q), eval_xyz(2, q), sprintf('  %.1e', err(q)), 'FontSize', 8);
+    subplot(1, 3, d)
+    inner_src.plot(log10(err_in(:) + tiny));
+    hold on
+    for j = 1:nch2
+        tt = linspace(t_splits(j), t_splits(j+1), narc);
+        for i = 1:nch1
+            la = Dband{d}.lam_splits(i);
+            lb = Dband{d}.lam_splits(i+1);
+            xb = [la*cos(tt), lb*cos(fliplr(tt))];
+            yb = [la*sin(tt), lb*sin(fliplr(tt))];
+            patch(xb, yb, log10(err_band(i, j) + tiny), 'EdgeColor', 'none')
+        end
+    end
+    hold off
+    view(2)
+    axis equal tight
+    clim(cl)
+    colorbar
+    title(names{d}, 'Interpreter', 'latex', 'FontSize', 16)
 end
+
+
+
+set(gcf, 'Position', [100, 100, 1200, 400])
+exportgraphics(gcf, 'density_resolution.pdf', 'ContentType', 'vector');

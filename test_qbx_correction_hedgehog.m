@@ -5,7 +5,7 @@ addpath('src/')
 rng(1)
 
 zk = 1.0;
-lam_inner = 0.899;
+lam_inner = 0.9;
 k = 8;
 nch1 = 2;
 nch2 = 24;
@@ -15,7 +15,7 @@ dgamma = @(t) [-sin(t); cos(t); 0];
 t_splits = linspace(0, 2*pi, nch2+1);
 angfun = @(th) 1+0.4*cos(th)+0.3*sin(2*th);
 
-lam_t = 0.978;
+lam_t = 0.89;
 t_t = 2*pi*rand;
 x = [lam_t*cos(t_t); lam_t*sin(t_t); 0];
 

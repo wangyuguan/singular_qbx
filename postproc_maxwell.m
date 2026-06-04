@@ -56,7 +56,7 @@ g = linspace(-1, 1, ng);
 lam_g = sqrt(X.^2 + Y.^2);
 sel = lam_g <= 1;
 eval_xyz = [X(sel).'; Y(sel).'; zeros(1, nnz(sel))];
-nev = size(eval_xyz, 2);
+nt = size(eval_xyz, 2);
 
 lam_e = sqrt(eval_xyz(1, :).^2 + eval_xyz(2, :).^2);
 t_e = mod(atan2(eval_xyz(2, :), eval_xyz(1, :)), 2*pi).';
@@ -70,13 +70,19 @@ i2e_grad = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, targinfo_eval);
 dr = (1 - lam_inner)/nch1;
 idx_e = find(lam_e >= lam_inner - 3*dr);
 QJ = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_J, opts, zk);
-QeJ.S = sparse(nev, nb);   QeJ.S(idx_e, :) = QJ.S;
-QeJ.Sx = sparse(nev, nb);  QeJ.Sx(idx_e, :) = QJ.Sx;
-QeJ.Sy = sparse(nev, nb);  QeJ.Sy(idx_e, :) = QJ.Sy;
+QeJ.S = sparse(nt, nb);   
+QeJ.S(idx_e, :) = QJ.S;
+QeJ.Sx = sparse(nt, nb);  
+QeJ.Sx(idx_e, :) = QJ.Sx;
+QeJ.Sy = sparse(nt, nb);  
+QeJ.Sy(idx_e, :) = QJ.Sy;
 QR = precompute_helm_qbx_corr(eval_xyz(:, idx_e), lam_e(idx_e), t_e(idx_e), D_rho, opts, zk);
-QeR.S = sparse(nev, nb);   QeR.S(idx_e, :) = QR.S;
-QeR.Sx = sparse(nev, nb);  QeR.Sx(idx_e, :) = QR.Sx;
-QeR.Sy = sparse(nev, nb);  QeR.Sy(idx_e, :) = QR.Sy;
+QeR.S = sparse(nt, nb);   
+QeR.S(idx_e, :) = QR.S;
+QeR.Sx = sparse(nt, nb);  
+QeR.Sx(idx_e, :) = QR.Sx;
+QeR.Sy = sparse(nt, nb);  
+QeR.Sy(idx_e, :) = QR.Sy;
 
  
 [S_Jx, ~, ~] = eval_layer(Jx, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
