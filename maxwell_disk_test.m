@@ -16,6 +16,8 @@ lam_inner = 0.9;
 k = 8;
 nch1 = 2;
 nch2 = 24;
+alpha_J = -1/2;
+alpha_rho = -1/2;
 
 gamma = @(t) [cos(t); sin(t); 0];
 dgamma = @(t) [-sin(t); cos(t); 0];
@@ -35,9 +37,9 @@ opts.k_dya = k;
 opts.ncores = 16;
 
 D_rho = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma, ...
-    t_splits, -1/2);
+    t_splits, alpha_rho);
 D_J = set_edge_patch(k, nch1, nch2, lam_inner, gamma, dgamma,...
-    t_splits, -1/2);
+    t_splits, alpha_J);
 nb = size(D_rho.src_xyz, 2);
 
 norder = k;
