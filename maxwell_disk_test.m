@@ -114,13 +114,16 @@ b2b_S_rho = Qbb.S;
 b2b_gx_rho = Qbb.Sx;  
 b2b_gy_rho = Qbb.Sy;
 
-% pull the inner-disc correction matrices out of their structs (shared by J/rho)
-m_i2i_S = i2i_S.spmat;  m_i2i_gx = i2i_grad.spmat_x;  m_i2i_gy = i2i_grad.spmat_y;
-m_i2b_S = i2b_S.spmat;  m_i2b_gx = i2b_grad.spmat_x;  m_i2b_gy = i2b_grad.spmat_y;
+
+m_i2i_S = i2i_S.spmat;  
+m_i2i_gx = i2i_grad.spmat_x;  
+m_i2i_gy = i2i_grad.spmat_y;
+m_i2b_S = i2b_S.spmat;  
+m_i2b_gx = i2b_grad.spmat_x; 
+ m_i2b_gy = i2b_grad.spmat_y;
 
 clear QbiJ QbiR Qbb i2i_S i2i_grad i2b_S i2b_grad
 
-% system-matrix entry handle, the near corrections passed as separate blocks
 Afun = @(i, j) efie2_sysmat_handle(i, j, target_xyz, ...
     src_xyz_J, src_w_J, src_xyz_rho, src_w_rho, ...
     m_i2i_S, m_i2i_gx, m_i2i_gy, m_i2b_S, m_i2b_gx, m_i2b_gy, ...
