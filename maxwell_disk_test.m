@@ -309,15 +309,7 @@ Gy = complex(zeros(M, nev, nf));
 for m = 1:M
     P = eval_xyz + m*h*nrm;
     g = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, struct('r', P));
-    sx = complex(zeros(nev, nf));
-    sy = complex(zeros(nev, nf));
-    for a = 1:nev
-        df = P(:, a) - src;
-        r = sqrt(sum(df.^2, 1)).';
-        coef = (1i*zk*r - 1).*exp(1i*zk*r)./(4*pi*r.^3);
-        sx(a, :) = (coef.*df(1, :).'.*w).'*sig_in;
-        sy(a, :) = (coef.*df(2, :).'.*w).'*sig_in;
-    end
+    [~, sx, sy] = smooth_layer_fmm(P, src, (w.*sig_in).', zk);
     Gx(m, :, :) = sx + g.spmat_x*sig_in;
     Gy(m, :, :) = sy + g.spmat_y*sig_in;
 end
