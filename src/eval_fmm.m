@@ -1,4 +1,4 @@
-function [S, Sx, Sy] = smooth_layer_fmm(tgt, src, q, zk)
+function [S, Sx, Sy] = eval_fmm(tgt, src, q, zk)
 
 nd = size(q, 1);
 srcinfo = [];

@@ -91,32 +91,42 @@ idx = find(lam_in >= lam_inner - 3*dr);
 % source on the D_J nodes 
 QbiJ = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_J, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_J, opts, zk);
-b2i_S_J = sparse(ni, nb);   b2i_S_J(idx, :) = QbiJ.S;
-b2i_gx_J = sparse(ni, nb);  b2i_gx_J(idx, :) = QbiJ.Sx;
-b2i_gy_J = sparse(ni, nb);  b2i_gy_J(idx, :) = QbiJ.Sy;
-b2b_S_J = Qbb.S;  b2b_gx_J = Qbb.Sx;  b2b_gy_J = Qbb.Sy;
+b2i_S_J = sparse(ni, nb);   
+b2i_S_J(idx, :) = QbiJ.S;
+b2i_gx_J = sparse(ni, nb);  
+b2i_gx_J(idx, :) = QbiJ.Sx;
+b2i_gy_J = sparse(ni, nb);  
+b2i_gy_J(idx, :) = QbiJ.Sy;
+b2b_S_J = Qbb.S;  
+b2b_gx_J = Qbb.Sx;  
+b2b_gy_J = Qbb.Sy;
 
 % source on the D_rho nodes  
 QbiR = precompute_helm_qbx_corr(inner_src.r(:, idx), lam_in(idx), t_in(idx), D_rho, opts, zk);
 Qbb = precompute_helm_qbx_corr(edge_tar, lam_ed, t_ed, D_rho, opts, zk);
-b2i_S_rho = sparse(ni, nb);   b2i_S_rho(idx, :) = QbiR.S;
-b2i_gx_rho = sparse(ni, nb);  b2i_gx_rho(idx, :) = QbiR.Sx;
-b2i_gy_rho = sparse(ni, nb);  b2i_gy_rho(idx, :) = QbiR.Sy;
-b2b_S_rho = Qbb.S;  b2b_gx_rho = Qbb.Sx;  b2b_gy_rho = Qbb.Sy;
+b2i_S_rho = sparse(ni, nb);   
+b2i_S_rho(idx, :) = QbiR.S;
+b2i_gx_rho = sparse(ni, nb);  
+b2i_gx_rho(idx, :) = QbiR.Sx;
+b2i_gy_rho = sparse(ni, nb);  
+b2i_gy_rho(idx, :) = QbiR.Sy;
+b2b_S_rho = Qbb.S;  
+b2b_gx_rho = Qbb.Sx;  
+b2b_gy_rho = Qbb.Sy;
 
-% assemble the correction matrices
-M_S_J = [i2i_S.spmat, b2i_S_J; i2b_S.spmat, b2b_S_J];
-M_gx_J = [i2i_grad.spmat_x, b2i_gx_J; i2b_grad.spmat_x, b2b_gx_J];
-M_gy_J = [i2i_grad.spmat_y, b2i_gy_J; i2b_grad.spmat_y, b2b_gy_J];
+% pull the inner-disc correction matrices out of their structs (shared by J/rho)
+m_i2i_S = i2i_S.spmat;  m_i2i_gx = i2i_grad.spmat_x;  m_i2i_gy = i2i_grad.spmat_y;
+m_i2b_S = i2b_S.spmat;  m_i2b_gx = i2b_grad.spmat_x;  m_i2b_gy = i2b_grad.spmat_y;
 
-M_S_rho = [i2i_S.spmat, b2i_S_rho; i2b_S.spmat, b2b_S_rho];
-M_gx_rho = [i2i_grad.spmat_x, b2i_gx_rho; i2b_grad.spmat_x, b2b_gx_rho];
-M_gy_rho = [i2i_grad.spmat_y, b2i_gy_rho; i2b_grad.spmat_y, b2b_gy_rho];
+clear QbiJ QbiR Qbb i2i_S i2i_grad i2b_S i2b_grad
 
-% system-matrix entry handle 
+% system-matrix entry handle, the near corrections passed as separate blocks
 Afun = @(i, j) efie2_sysmat_handle(i, j, target_xyz, ...
-    src_xyz_J, src_w_J, M_S_J, M_gx_J, M_gy_J, ...
-    src_xyz_rho, src_w_rho, M_S_rho, M_gx_rho, M_gy_rho, zk, N);
+    src_xyz_J, src_w_J, src_xyz_rho, src_w_rho, ...
+    m_i2i_S, m_i2i_gx, m_i2i_gy, m_i2b_S, m_i2b_gx, m_i2b_gy, ...
+    b2i_S_J, b2i_gx_J, b2i_gy_J, b2b_S_J, b2b_gx_J, b2b_gy_J, ...
+    b2i_S_rho, b2i_gx_rho, b2i_gy_rho, b2b_S_rho, b2b_gx_rho, b2b_gy_rho, ...
+    zk, N, ni);
 
 
 rx = [target_xyz, target_xyz, target_xyz];      
@@ -139,6 +149,7 @@ mem_dense = (3*N)^2*16/1e6;
 compression = mem_dense/mem;
 fprintf('factor of compression is %6d\n', compression)
 
+
 if 1==0
     % check forward map accuracy 
     f1 = @(p) 2*cos(p(1,:))+3*sin(p(2,:));
@@ -153,12 +164,21 @@ if 1==0
 end
 
 
+
+clear Afun m_i2i_S m_i2i_gx m_i2i_gy m_i2b_S m_i2b_gx m_i2b_gy
+clear b2i_S_J b2i_gx_J b2i_gy_J b2b_S_J b2b_gx_J b2b_gy_J
+clear b2i_S_rho b2i_gx_rho b2i_gy_rho b2b_S_rho b2b_gx_rho b2b_gy_rho
+
 [Asp, pp, qq] = rskel_xsp(F);
+clear F
+nsp = size(Asp, 1);
 [L, U, P] = lu(Asp);
-rhs_ext = [rhs(pp); zeros(size(Asp, 1) - N*3, 1)];
+clear Asp
+rhs_ext = [rhs(pp); zeros(nsp - N*3, 1)];
 sol_ext = U\(L\(P*rhs_ext));
 xsol = sol_ext(1:N*3);
 xsol(qq) = xsol;
+clear L U P
 
 
 Jx = xsol(1:N);
@@ -167,12 +187,10 @@ rho = xsol(2*N+1:3*N);
 
 
 
-
-
 save('maxwell_results.mat', 'Jx', 'Jy', 'rho')
 
 % check boundary condition
-M = 5;
+n_hedgehog = 5;
 h = 1e-2;
 
 ng = 100;
@@ -207,18 +225,18 @@ QeR.Sy = sparse(nt, nb);
 QeR.Sy(idx_e, :) = QR.Sy;
  
 
-[S_Jx, ~, ~] = eval_layer(Jx, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[S_Jy, ~, ~] = eval_layer(Jy, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[S_rho, ~, ~] = eval_layer(rho, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
+[S_Jx, ~, ~] = efie2_eval(Jx, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
+[S_Jy, ~, ~] = efie2_eval(Jy, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
+[S_rho, ~, ~] = efie2_eval(rho, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
 Jx_b = [zeros(ni, 1); Jx(ni+1:end)];
 Jy_b = [zeros(ni, 1); Jy(ni+1:end)];
 rho_b = [zeros(ni, 1); rho(ni+1:end)];
-[~, dxJx_b, ~] = eval_layer(Jx_b, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[~, ~, dyJy_b] = eval_layer(Jy_b, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[~, dxrho_b, dyrho_b] = eval_layer(rho_b, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
+[~, dxJx_b, ~] = efie2_eval(Jx_b, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
+[~, ~, dyJy_b] = efie2_eval(Jy_b, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
+[~, dxrho_b, dyrho_b] = efie2_eval(rho_b, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
 
  
-[Sx_in, Sy_in] = slp_grad_inner_hh([Jx(1:ni), Jy(1:ni), rho(1:ni)], inner_src, eval_xyz, zk, eps_fmm, M, h);
+[Sx_in, Sy_in] = slp_grad_inner_hh([Jx(1:ni), Jy(1:ni), rho(1:ni)], inner_src, eval_xyz, zk, eps_fmm, n_hedgehog, h);
 dxJx = Sx_in(:, 1) + dxJx_b;
 dyJy = Sy_in(:, 2) + dyJy_b;
 dx_rho = Sx_in(:, 3) + dxrho_b;
@@ -309,7 +327,7 @@ Gy = complex(zeros(M, nev, nf));
 for m = 1:M
     P = eval_xyz + m*h*nrm;
     g = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, struct('r', P));
-    [~, sx, sy] = smooth_layer_fmm(P, src, (w.*sig_in).', zk);
+    [~, sx, sy] = eval_fmm(P, src, (w.*sig_in).', zk);
     Gx(m, :, :) = sx + g.spmat_x*sig_in;
     Gy(m, :, :) = sy + g.spmat_y*sig_in;
 end
