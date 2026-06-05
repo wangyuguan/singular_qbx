@@ -1,8 +1,4 @@
 function [S, Sx, Sy] = smooth_layer_fmm(tgt, src, q, zk)
-% smooth single-layer value and (x, y) gradient at targets tgt from sources src
-% with charge strengths q (nd x ns, one row per density), via the Helmholtz FMM.
-% FMM3D uses the kernel e^{ikr}/(4 pi r), matching our convention, so no rescale.
-% Returns S, Sx, Sy as nt x nd.
 
 nd = size(q, 1);
 srcinfo = [];
