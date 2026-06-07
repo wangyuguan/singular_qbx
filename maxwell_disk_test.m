@@ -12,10 +12,10 @@ rng(1)
 
 zk = 1.0;
 eps_fmm = 1e-12;
-lam_inner = 0.9;
+lam_inner = 0.95;
 k = 8;
-nch1 = 2;
-nch2 = 24;
+nch1 = 1;
+nch2 = 36;
 alpha_J = -1/2;
 alpha_rho = -1/2;
 
@@ -120,7 +120,7 @@ m_i2i_gx = i2i_grad.spmat_x;
 m_i2i_gy = i2i_grad.spmat_y;
 m_i2b_S = i2b_S.spmat;  
 m_i2b_gx = i2b_grad.spmat_x; 
- m_i2b_gy = i2b_grad.spmat_y;
+m_i2b_gy = i2b_grad.spmat_y;
 
 clear QbiJ QbiR Qbb i2i_S i2i_grad i2b_S i2b_grad
 
@@ -132,8 +132,8 @@ Afun = @(i, j) efie2_sysmat_handle(i, j, target_xyz, ...
     zk, N, ni);
 
 
-rx = [target_xyz, target_xyz, target_xyz];      
-cx = [src_xyz_J,  src_xyz_J,  src_xyz_rho];
+% single point set (no proxy, so points only cluster; Afun gives exact entries)
+x_pts = [target_xyz, target_xyz, target_xyz];
 
 occ = 500;
 rtol = 1e-8;
@@ -142,11 +142,11 @@ fopts.verb = 1;
 fopts.symm = 'n';
 fopts.Tmax = 1.5;
 tic
-F = rskel(Afun, rx, cx, occ, rtol, [], fopts);
+F = rskelf(Afun, x_pts, occ, rtol, [], fopts);
 t_rskel = toc;
-w = whos('F'); 
+w = whos('F');
 mem = w.bytes/1e6;
-fprintf('rskel time/mem: %10.4e (s) / %6.2f (MB)\n', t_rskel, mem)
+fprintf('rskelf time/mem: %10.4e (s) / %6.2f (MB)\n', t_rskel, mem)
 
 mem_dense = (3*N)^2*16/1e6; 
 compression = mem_dense/mem;
@@ -159,11 +159,11 @@ if 1==0
     f2 = @(p) p(1,:).^2+p(2,:).^2;
     f3 = @(p) (p(1,:)+p(2,:))/2;
     Xs = [f1(src_xyz_J).'; f2(src_xyz_J).'; f3(src_xyz_rho).'];
-    y_rskel = rskel_mv(F, Xs);
+    y_rskel = rskelf_mv(F, Xs);
     A_true = Afun((1:3*N).', (1:3*N).');
     y_true = A_true*Xs;
     rel_err = norm(y_rskel - y_true)/norm(y_true);
-    fprintf('relative error of rskel forward map is %.2d\n', rel_err)
+    fprintf('relative error of rskelf forward map is %.2d\n', rel_err)
 end
 
 
@@ -172,16 +172,9 @@ clear Afun m_i2i_S m_i2i_gx m_i2i_gy m_i2b_S m_i2b_gx m_i2b_gy
 clear b2i_S_J b2i_gx_J b2i_gy_J b2b_S_J b2b_gx_J b2b_gy_J
 clear b2i_S_rho b2i_gx_rho b2i_gy_rho b2b_S_rho b2b_gx_rho b2b_gy_rho
 
-[Asp, pp, qq] = rskel_xsp(F);
+
+xsol = rskelf_sv(F, rhs);
 clear F
-nsp = size(Asp, 1);
-[L, U, P] = lu(Asp);
-clear Asp
-rhs_ext = [rhs(pp); zeros(nsp - N*3, 1)];
-sol_ext = U\(L\(P*rhs_ext));
-xsol = sol_ext(1:N*3);
-xsol(qq) = xsol;
-clear L U P
 
 
 Jx = xsol(1:N);
@@ -190,13 +183,10 @@ rho = xsol(2*N+1:3*N);
 
 
 
-save('maxwell_results.mat', 'Jx', 'Jy', 'rho')
+
 
 % check boundary condition
-n_hedgehog = 5;
-h = 1e-2;
-
-ng = 100;
+ng = 50;
 g = linspace(-1, 1, ng);
 [X, Y] = meshgrid(g, g);
 lam_g = sqrt(X.^2 + Y.^2);
@@ -207,7 +197,10 @@ nt = size(eval_xyz, 2);
 lam_e = sqrt(eval_xyz(1, :).^2 + eval_xyz(2, :).^2);
 t_e = mod(atan2(eval_xyz(2, :), eval_xyz(1, :)), 2*pi).';
 
-targinfo_eval = struct('r', eval_xyz);
+% locate targets on the inner disc so fmm3dbie uses the singular self-rule for
+% the on-surface gradient (accurate to the edge, no hedgehog needed)
+[pid, uvs] = find_patch_uv(inner_src, eval_xyz);
+targinfo_eval = struct('r', eval_xyz, 'patch_id', pid, 'uvs_targ', uvs);
 i2e_S = helm3d.dirichlet.get_quad_cor_sub(inner_src, eps_fmm, zk, [1, 0], targinfo_eval);
 i2e_grad = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, targinfo_eval);
 
@@ -228,22 +221,10 @@ QeR.Sy = sparse(nt, nb);
 QeR.Sy(idx_e, :) = QR.Sy;
  
 
-[S_Jx, ~, ~] = efie2_eval(Jx, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[S_Jy, ~, ~] = efie2_eval(Jy, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[S_rho, ~, ~] = efie2_eval(rho, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
-Jx_b = [zeros(ni, 1); Jx(ni+1:end)];
-Jy_b = [zeros(ni, 1); Jy(ni+1:end)];
-rho_b = [zeros(ni, 1); rho(ni+1:end)];
-[~, dxJx_b, ~] = efie2_eval(Jx_b, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[~, ~, dyJy_b] = efie2_eval(Jy_b, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
-[~, dxrho_b, dyrho_b] = efie2_eval(rho_b, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
-
- 
-[Sx_in, Sy_in] = slp_grad_inner_hh([Jx(1:ni), Jy(1:ni), rho(1:ni)], inner_src, eval_xyz, zk, eps_fmm, n_hedgehog, h);
-dxJx = Sx_in(:, 1) + dxJx_b;
-dyJy = Sy_in(:, 2) + dyJy_b;
-dx_rho = Sx_in(:, 3) + dxrho_b;
-dy_rho = Sy_in(:, 3) + dyrho_b;
+% gradients come straight from efie2_eval (inner self-rule + band QBX)
+[S_Jx, dxJx, ~] = efie2_eval(Jx, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
+[S_Jy, ~, dyJy] = efie2_eval(Jy, inner_src, D_J, eval_xyz, zk, i2e_S, i2e_grad, QeJ);
+[S_rho, dx_rho, dy_rho] = efie2_eval(rho, inner_src, D_rho, eval_xyz, zk, i2e_S, i2e_grad, QeR);
 
 Ex = 1i*zk*S_Jx + dx_rho;
 Ey = 1i*zk*S_Jy + dy_rho;
@@ -318,30 +299,4 @@ end
 set(gcf, 'Position', [100, 100, 1200, 400])
 exportgraphics(gcf, 'density_resolution.pdf', 'ContentType', 'vector');
 
-
-function [Sx, Sy] = slp_grad_inner_hh(sig_in, inner_src, eval_xyz, zk, eps_fmm, M, h)
-nev = size(eval_xyz, 2);
-nf = size(sig_in, 2);
-nrm = [0; 0; 1];
-src = inner_src.r;
-w = inner_src.wts(:);
-Gx = complex(zeros(M, nev, nf));
-Gy = complex(zeros(M, nev, nf));
-for m = 1:M
-    P = eval_xyz + m*h*nrm;
-    g = helm3d.sgrad.get_quad_cor_sub(inner_src, eps_fmm, zk, struct('r', P));
-    [~, sx, sy] = eval_fmm(P, src, (w.*sig_in).', zk);
-    Gx(m, :, :) = sx + g.spmat_x*sig_in;
-    Gy(m, :, :) = sy + g.spmat_y*sig_in;
-end
-sv = (1:M).';
-V = sv.^(0:M-1);
-Sx = complex(zeros(nev, nf));
-Sy = complex(zeros(nev, nf));
-for f = 1:nf
-    cx = V\Gx(:, :, f);
-    cy = V\Gy(:, :, f);
-    Sx(:, f) = cx(1, :).';
-    Sy(:, f) = cy(1, :).';
-end
-end
+save('maxwell_results.mat', 'Jx', 'Jy', 'rho')
